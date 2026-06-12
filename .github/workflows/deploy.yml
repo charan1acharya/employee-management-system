@@ -18,4 +18,5 @@ jobs:
           distribution: 'temurin'
 
       - name: Build Application
+        working-directory: employee_management
         run: ./mvnw clean package
