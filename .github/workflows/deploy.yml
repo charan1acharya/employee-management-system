@@ -50,3 +50,11 @@ jobs:
         run: |
           docker push \
           ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:latest
+
+      - name: Force ECS Deployment
+        run: |
+          aws ecs update-service \
+            --cluster employee-cluster1 \
+            --service employee-service \
+            --force-new-deployment \
+            --region ap-south-1
