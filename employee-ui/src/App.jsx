@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import './App.css'
 
-const DEFAULT_API_URL = 'http://13.204.53.118:8080/employees'
+const DEFAULT_API_URL = 'http://3.110.181.204:8080/employees'
 const API_URL = import.meta.env.VITE_API_URL || DEFAULT_API_URL
 const initialForm = { name: '', email: '', salary: '' }
 
