@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import './App.css'
 
-const API_URL = 'http://13.204.53.118:8080/employees'
+const DEFAULT_API_URL = 'http://13.204.53.118:8080/employees'
+const API_URL = import.meta.env.VITE_API_URL || DEFAULT_API_URL
 const initialForm = { name: '', email: '', salary: '' }
 
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
@@ -11,15 +12,25 @@ function App() {
   const [employees, setEmployees] = useState([])
   const [formData, setFormData] = useState(initialForm)
   const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [editingEmployee, setEditingEmployee] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [sortBy, setSortBy] = useState('id')
+  const [sortDir, setSortDir] = useState('asc')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
 
   useEffect(() => {
     fetchEmployees()
   }, [])
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim().toLowerCase()), 300)
+    return () => clearTimeout(t)
+  }, [searchTerm])
 
   const fetchEmployees = async () => {
     setLoading(true)
@@ -36,17 +47,42 @@ function App() {
 
   const filteredEmployees = useMemo(() => {
     return employees.filter((employee) => {
-      const query = searchTerm.toLowerCase().trim()
+      const query = debouncedSearch
+      if (!query) return true
       return (
-        employee.name.toLowerCase().includes(query) ||
-        employee.email.toLowerCase().includes(query) ||
+        (employee.name || '').toLowerCase().includes(query) ||
+        (employee.email || '').toLowerCase().includes(query) ||
         String(employee.id).includes(query)
       )
     })
-  }, [employees, searchTerm])
+  }, [employees, debouncedSearch])
+
+  const sortedEmployees = useMemo(() => {
+    const arr = [...filteredEmployees]
+    arr.sort((a, b) => {
+      const av = a[sortBy] ?? ''
+      const bv = b[sortBy] ?? ''
+      if (sortBy === 'salary' || sortBy === 'id') {
+        return sortDir === 'asc' ? Number(av) - Number(bv) : Number(bv) - Number(av)
+      }
+      const A = String(av).toLowerCase()
+      const B = String(bv).toLowerCase()
+      if (A < B) return sortDir === 'asc' ? -1 : 1
+      if (A > B) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+    return arr
+  }, [filteredEmployees, sortBy, sortDir])
 
   const totalPayroll = employees.reduce((sum, employee) => sum + Number(employee.salary || 0), 0)
   const averageSalary = employees.length ? totalPayroll / employees.length : 0
+
+  const totalPages = Math.max(1, Math.ceil(sortedEmployees.length / pageSize))
+  useEffect(() => { if (currentPage > totalPages) setCurrentPage(1) }, [totalPages])
+  const paginatedEmployees = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return sortedEmployees.slice(start, start + pageSize)
+  }, [sortedEmployees, currentPage, pageSize])
 
   const handleChange = (event) => {
     const { name, value } = event.target
@@ -55,6 +91,11 @@ function App() {
 
   const handleSearch = (event) => {
     setSearchTerm(event.target.value)
+  }
+
+  const handleSort = (column) => {
+    if (sortBy === column) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortBy(column); setSortDir('asc') }
   }
 
   const handleEdit = (employee) => {
@@ -77,9 +118,7 @@ function App() {
 
   const handleDelete = async (id) => {
     const confirmDelete = window.confirm('Delete this employee? This action cannot be undone.')
-    if (!confirmDelete) {
-      return
-    }
+    if (!confirmDelete) return
 
     setError('')
     setSuccess('')
@@ -232,7 +271,7 @@ function App() {
           <div className="panel-header">
             <div>
               <h2>Employee list</h2>
-              <p>{loading ? 'Fetching employees...' : `Live list from the backend API (${filteredEmployees.length} records shown).`}</p>
+              <p>{loading ? 'Fetching employees...' : `Live list from the backend API (${sortedEmployees.length} records shown).`}</p>
             </div>
             <div className="header-actions">
               <button
@@ -260,22 +299,22 @@ function App() {
             <div className="empty-state">Loading employee records...</div>
           ) : employees.length === 0 ? (
             <div className="empty-state">No employees available yet.</div>
-          ) : filteredEmployees.length === 0 ? (
+          ) : sortedEmployees.length === 0 ? (
             <div className="empty-state">No employees matched your search.</div>
           ) : (
             <div className="table-wrapper">
               <table className="employee-table">
                 <thead>
                   <tr>
-                    <th>ID</th>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Salary</th>
+                    <th onClick={() => handleSort('id')} className="sortable">ID {sortBy==='id'?(sortDir==='asc'? '▲':'▼'):''}</th>
+                    <th onClick={() => handleSort('name')} className="sortable">Name {sortBy==='name'?(sortDir==='asc'? '▲':'▼'):''}</th>
+                    <th onClick={() => handleSort('email')} className="sortable">Email {sortBy==='email'?(sortDir==='asc'? '▲':'▼'):''}</th>
+                    <th onClick={() => handleSort('salary')} className="sortable">Salary {sortBy==='salary'?(sortDir==='asc'? '▲':'▼'):''}</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredEmployees.map((employee) => (
+                  {paginatedEmployees.map((employee) => (
                     <tr key={employee.id}>
                       <td>{employee.id}</td>
                       <td>{employee.name}</td>
@@ -295,6 +334,21 @@ function App() {
               </table>
             </div>
           )}
+
+          <div className="pagination-row">
+            <div className="pagination-controls">
+              <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</button>
+              <span>Page {currentPage} / {totalPages}</span>
+              <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</button>
+            </div>
+            <div className="page-size">
+              <label>Rows: <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1) }}>
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+              </select></label>
+            </div>
+          </div>
         </section>
       </main>
     </div>
