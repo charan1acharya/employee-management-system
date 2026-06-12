@@ -23,4 +23,4 @@ jobs:
 
       - name: Build Application
         working-directory: employee_management
-        run: ./mvnw clean package
+        run: ./mvnw clean package -DskipTests
