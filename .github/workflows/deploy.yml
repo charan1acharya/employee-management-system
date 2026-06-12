@@ -17,6 +17,10 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Give execute permission
+        working-directory: employee_management
+        run: chmod +x mvnw
+
       - name: Build Application
         working-directory: employee_management
         run: ./mvnw clean package
